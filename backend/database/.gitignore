@@ -1,0 +1,4 @@
+# El fichero SQLite de desarrollo se versiona para que la aplicación arranque
+# sin pasos previos; los ficheros auxiliares del modo WAL no se versionan.
+*.sqlite-shm
+*.sqlite-wal

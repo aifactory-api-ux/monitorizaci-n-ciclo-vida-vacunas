@@ -1,0 +1,157 @@
+# Orquestación de los cuatro servicios del despliegue On-Premise o nube
+# privada de MSD (D1). Los valores sensibles se inyectan desde el fichero
+# `.env` de la raíz o desde el gestor de secretos; no hay secretos en este
+# fichero.
+
+name: vaccine-batch-tracking
+
+services:
+  bff:
+    build:
+      context: .
+      target: bff
+    image: msd/vaccine-batch-tracking-bff:latest
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_NAME: ${APP_NAME:-Vaccine Batch Tracking}
+      APP_ENV: ${APP_ENV:-production}
+      APP_KEY: ${APP_KEY:?APP_KEY es obligatoria en el despliegue de contenedor}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
+      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: ${DB_DATABASE:-vaccine_batch}
+      DB_USERNAME: ${DB_USERNAME:?DB_USERNAME es obligatoria en el despliegue de contenedor}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD es obligatoria en el despliegue de contenedor}
+      CACHE_STORE: redis
+      CACHE_PREFIX: ${CACHE_PREFIX:-vaccine_batch_cache}
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      # El dominio difunde los eventos por la conexión `reverb`: es el servidor
+      # Reverb quien los entrega a los clientes WebSocket y quien los propaga
+      # por Redis para que los recibió todas las réplicas del BFF.
+      BROADCAST_CONNECTION: reverb
+      REDIS_CLIENT: predis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REVERB_APP_ID: ${REVERB_APP_ID:?REVERB_APP_ID es obligatoria en el despliegue de contenedor}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:?REVERB_APP_KEY es obligatoria en el despliegue de contenedor}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:?REVERB_APP_SECRET es obligatoria en el despliegue de contenedor}
+      REVERB_HOST: 127.0.0.1
+      REVERB_PORT: "8080"
+      REVERB_SCHEME: ${REVERB_SCHEME:-http}
+      # Orquestación mediante Redis: el servidor Reverb publica y recibe los
+      # eventos por el canal `reverb` de Redis, de modo que un evento emitido
+      # en una réplica llega a los clientes conectados a las demás.
+      REVERB_SCALING_ENABLED: ${REVERB_SCALING_ENABLED:-true}
+      SECRETS_DRIVER: ${SECRETS_DRIVER:-env}
+      LIMS_ENABLED: ${LIMS_ENABLED:-false}
+      LIMS_BASE_URL: ${LIMS_BASE_URL:-}
+      LIMS_API_TOKEN: ${LIMS_API_TOKEN:-}
+      MONITORING_THERMAL_DEVIATION_THRESHOLD: ${MONITORING_THERMAL_DEVIATION_THRESHOLD:-2.0}
+      MONITORING_SPHEREON_ANOMALY_THRESHOLD: ${MONITORING_SPHEREON_ANOMALY_THRESHOLD:-5.0}
+      MONITORING_FEED_PATH: ${MONITORING_FEED_PATH:-}
+      MONITORING_EMAIL_ENABLED: ${MONITORING_EMAIL_ENABLED:-false}
+      MONITORING_EMAIL_RECIPIENTS: ${MONITORING_EMAIL_RECIPIENTS:-}
+      MONITORING_SMS_ENABLED: ${MONITORING_SMS_ENABLED:-false}
+      MONITORING_SMS_RECIPIENTS: ${MONITORING_SMS_RECIPIENTS:-}
+    volumes:
+      - bff-storage:/var/www/html/storage
+    ports:
+      - "${BFF_HTTP_PORT:-8081}:80"
+    networks:
+      - vaccine-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  frontend:
+    build:
+      context: .
+      target: frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+        VITE_REVERB_APP_KEY: ${REVERB_APP_KEY:-}
+        VITE_REVERB_HOST: ${VITE_REVERB_HOST:-localhost}
+        VITE_REVERB_PORT: ${VITE_REVERB_PORT:-8080}
+        VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME:-http}
+    image: msd/vaccine-batch-tracking-frontend:latest
+    restart: unless-stopped
+    depends_on:
+      bff:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    networks:
+      - vaccine-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-vaccine_batch}
+      MYSQL_USER: ${DB_USERNAME:?DB_USERNAME es obligatoria en el despliegue de contenedor}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD es obligatoria en el despliegue de contenedor}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD es obligatoria en el despliegue de contenedor}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    networks:
+      - vaccine-net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - redis-data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - vaccine-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+networks:
+  vaccine-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:
+  bff-storage:

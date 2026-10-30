@@ -1,0 +1,42 @@
+# Contexto de construcción del monorepo: sólo se envían al demonio los
+# ficheros necesarios para construir las imágenes.
+
+.git
+.github
+.gitignore
+.dockerignore
+.artifacts
+.opencode
+openspec
+SPEC.md
+DEVELOPMENT_PLAN.md
+README.md
+
+# Dependencias y artefactos de construcción
+**/node_modules
+# Artefactos compilados: el SPA se construye dentro de la imagen (stage
+# `frontend-builder`) en `site`, de modo que esta regla excluye del contexto el
+# artefacto local `frontend/dist` sin poder excluir la ruta que el `Dockerfile`
+# copia desde ese stage.
+**/dist
+**/build
+**/coverage
+backend/vendor
+backend/.phpunit.cache
+backend/.phpunit.result.cache
+backend/storage/logs/*
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/app/private/*
+backend/storage/oauth-*.key
+backend/database/*.sqlite
+backend/database/*.sqlite-shm
+backend/database/*.sqlite-wal
+backend/.env
+backend/node_modules
+
+# Ficheros locales de entorno
+.env
+**/.env
+!**/.env.example

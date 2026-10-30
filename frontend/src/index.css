@@ -1,0 +1,35 @@
+@import 'tailwindcss';
+
+/*
+ * El tema de Tailwind (colores, tipografía, escala de espaciado, radios,
+ * sombras y movimiento) se genera en tiempo de compilación a partir de los
+ * tokens del contrato UI/UX aprobado, que viven en `src/styles/tokens.ts` y
+ * se traducen en `src/styles/theme.ts`.
+ */
+
+@layer base {
+    :root {
+        color-scheme: light;
+    }
+
+    body {
+        margin: 0;
+        min-height: 100vh;
+        background-color: var(--color-canvas);
+        color: var(--color-text-high);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+    }
+
+    /* Movimiento reducido: se desactivan las animaciones no esenciales. */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+        }
+    }
+}

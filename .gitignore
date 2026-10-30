@@ -1,0 +1,9 @@
+node_modules/
+dist/
+site/
+build/
+.next/
+coverage/
+__pycache__/
+.venv/
+.env
