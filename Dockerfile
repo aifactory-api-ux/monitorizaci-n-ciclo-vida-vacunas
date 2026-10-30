@@ -78,10 +78,10 @@ RUN apk add --no-cache \
         pcntl \
         pdo_mysql \
         zip \
-    && apk del --virtual .build-deps \
+    && apk del .build-deps \
     && addgroup nginx www-data
 
-COPY --from=composer:2.7-bin /composer /usr/bin/composer
+COPY --from=composer/composer:2.7-bin /composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
